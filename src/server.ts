@@ -10,8 +10,14 @@ const server = express();
 const router = express.Router();
 const PORT = process.env.PORT || 9060;
 
-server.use(cors());
-server.use(express.json());
+server.use(cors(
+    {
+        origin: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    }
+));
+server.options('*', cors());
+    server.use(express.json());
 server.use(express.urlencoded({extended: true}));
 server.use(fileUpload());
 
