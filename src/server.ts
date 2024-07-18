@@ -4,11 +4,13 @@ import connection from './database/connection.ts';
 import user from './routes/user.ts';
 import drop from './routes/drop.ts';
 import comment from "./routes/comment.ts";
+import cors from 'cors';
 
 const server = express();
 const router = express.Router();
 const PORT = process.env.PORT || 9060;
 
+server.use(cors());
 server.use(express.json());
 server.use(express.urlencoded({extended: true}));
 server.use(fileUpload());
