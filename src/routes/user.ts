@@ -245,29 +245,6 @@ router.get('/following/:_id', async (request: CustomRequest, response) => {
 
         const skip = (page - 1) * limit;
 
-        /*const users = await User.aggregate([
-            {$match: {username}},
-            {
-                $addFields: {
-                    isFollowing: {
-                        $in: [new Types.ObjectId(_id), '$followers']
-                    }
-                },
-            },
-            {
-                $project: {
-                    _id: 1,
-                    src: 1,
-                    username: 1,
-                    drops: {$size: '$drops'},
-                    following: {$size: '$following'},
-                    followers: {$size: '$followers'},
-                    isFollowing: 1,
-                    verified: 1
-                }
-            }
-        ]);*/
-
         const users = await User.aggregate([
             {$match: {_id: new Types.ObjectId(_id)}},
             {
@@ -283,8 +260,13 @@ router.get('/following/:_id', async (request: CustomRequest, response) => {
                     allUsers: {$size: '$following'}
                 }
             },
-            {$skip: skip},
-            {$limit: limit},
+            {
+                $addFields: {
+                    followers: {
+                        $slice: ['$followers', skip, limit],
+                    }
+                }
+            },
             {
                 $project: {
                     following: {
@@ -315,37 +297,14 @@ router.get('/following/:_id', async (request: CustomRequest, response) => {
 
 router.get('/followers/:_id', async (request: CustomRequest, response) => {
     try {
-        const {_id} = request.params;
+        const {_id} = request?.params;
 
-        const page = Number(request.query.page) || 1;
-        const limit = Number(request.query.limit) || 10;
+        const page = parseInt(`${request?.query?.page}`) || 1;
+        const limit = parseInt(`${request?.query?.limit}`) || 10;
 
         const skip = (page - 1) * limit;
 
-        /*const users = await User.aggregate([
-            {$match: {username}},
-            {
-                $addFields: {
-                    isFollowing: {
-                        $in: [new Types.ObjectId(_id), '$followers']
-                    }
-                },
-            },
-            {
-                $project: {
-                    _id: 1,
-                    src: 1,
-                    username: 1,
-                    drops: {$size: '$drops'},
-                    following: {$size: '$following'},
-                    followers: {$size: '$followers'},
-                    isFollowing: 1,
-                    verified: 1
-                }
-            }
-        ]);*/
-
-        const users = await User.aggregate([
+        const followers = await User.aggregate([
             {$match: {_id: new Types.ObjectId(_id)}},
             {
                 $lookup: {
@@ -360,8 +319,13 @@ router.get('/followers/:_id', async (request: CustomRequest, response) => {
                     allUsers: {$size: '$followers'}
                 }
             },
-            {$skip: skip},
-            {$limit: limit},
+            {
+                $addFields: {
+                    followers: {
+                        $slice: ['$followers', skip, limit],
+                    }
+                }
+            },
             {
                 $project: {
                     followers: {
@@ -372,19 +336,14 @@ router.get('/followers/:_id', async (request: CustomRequest, response) => {
                     },
                     allUsers: 1,
                 }
-            }
+            },
         ]);
 
-        /*const users = await User.findOne({_id}).select({following: {$slice: [skip, limit]}}).populate({
-            path: 'following',
-            select: ['src', 'username', 'verified'],
-        }).exec();*/
-
-        if (!users) {
+        if (!followers) {
             return response.status(404).json({message: 'users not found'});
         }
 
-        return response.status(200).json({data: users[0]});
+        return response.status(200).json({data: followers[0]});
     } catch (error) {
         return response.status(500).json({message: error});
     }
