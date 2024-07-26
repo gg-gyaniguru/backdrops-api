@@ -8,7 +8,7 @@ interface User extends Document {
     drops: [{ type: Types.ObjectId, ref: 'Drop' }];
     likes: [{ type: Types.ObjectId, ref: 'Drop' }];
     following: [{ type: Types.ObjectId, ref: 'User' }];
-    followers: [{ type: Types.ObjectId, ref: 'User' }];
+    followers: [{ type: Types.ObjectId, ref: 'Userc' }];
     comments: [{type: Types.ObjectId, ref: 'Comment'}];
     verified:boolean;
 }

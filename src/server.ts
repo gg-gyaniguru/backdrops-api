@@ -1,4 +1,6 @@
 import express from 'express';
+import {createServer} from 'http';
+import {Server} from "socket.io";
 import fileUpload from 'express-fileupload';
 import connection from './database/connection.ts';
 import user from './routes/user.ts';
@@ -8,6 +10,13 @@ import cors from 'cors';
 
 const server = express();
 const router = express.Router();
+const httpServer = createServer(server);
+const io = new Server(httpServer, {
+    cors: {
+        origin: 'http://localhost:6090',
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    }
+});
 const PORT = process.env.PORT || 9060;
 
 server.use(cors(
@@ -39,5 +48,5 @@ server.use(fileUpload());
         return response.status(404).json({message: 'route not found'});
     });
 
-    server.listen(PORT);
+    httpServer.listen(PORT);
 })();
