@@ -8,9 +8,10 @@ interface User extends Document {
     drops: [{ type: Types.ObjectId, ref: 'Drop' }];
     likes: [{ type: Types.ObjectId, ref: 'Drop' }];
     following: [{ type: Types.ObjectId, ref: 'User' }];
-    followers: [{ type: Types.ObjectId, ref: 'Userc' }];
-    comments: [{type: Types.ObjectId, ref: 'Comment'}];
-    verified:boolean;
+    followers: [{ type: Types.ObjectId, ref: 'User' }];
+    comments: [{ type: Types.ObjectId, ref: 'Comment' }];
+    verified: boolean;
+    subscriptions: [{ type: Types.ObjectId, ref: 'Subscription' }];
 }
 
 const UserSchema = new Schema<User>({
@@ -24,6 +25,7 @@ const UserSchema = new Schema<User>({
     followers: {type: [{type: Types.ObjectId, ref: 'User'}], default: []},
     comments: {type: [{type: Types.ObjectId, ref: 'Comment'}], default: []},
     verified: {type: Boolean, default: false},
+    subscriptions: {type: [{type: Types.ObjectId, ref: 'Subscription'}], default: []}
 }, {versionKey: false});
 
 const User = model<User>('User', UserSchema);
