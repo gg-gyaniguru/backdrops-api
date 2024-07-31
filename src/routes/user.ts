@@ -1,19 +1,52 @@
 import express from 'express';
+import nodemailer from 'nodemailer';
 import {create, existsBy_id, existsByEmail, existsByUsername, type SignUp} from "../queries/user.ts";
 import {isValidEmail, isValidUsername} from "../validations/user.ts";
 import {compare, encrypt} from "../utils/bcrypt.ts";
 import User from "../models/user.ts";
 import type {CustomRequest} from "../types/CustomRequest.ts";
-import {createSrc, removeSrc} from "./drop.ts";
-import Store from "../models/store.ts";
+import {createSrc} from "./drop.ts";
 import {Types} from "mongoose";
 import {verify} from "../middlewares/user.ts";
 import {generateAccessToken} from "../utils/jwt.ts";
 import Drop from "../models/drop.ts";
 import Comment from "../models/comment.ts";
 
+const {GMAIL_ID, GMAIL_PASSWORD} = process.env;
 
 const router = express.Router();
+
+const field = (input: string): string => {
+    return input.trim().toLowerCase();
+}
+
+router.post('/otp', async (request, response) => {
+    try {
+        const {email, otp} = request.body;
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: GMAIL_ID,
+                pass: GMAIL_PASSWORD
+            }
+        });
+
+        const mailOptions = {
+            from: GMAIL_ID,
+            to: field(email),
+            subject: 'backdrops verification',
+            text: otp
+        }
+
+        await transporter.sendMail(mailOptions);
+
+        return response.status(201).json({message: 'otp send success'});
+
+    } catch (error) {
+        return response.status(500).json({message: 'internal error'});
+    }
+});
 
 router.post('/signup', async (request, response) => {
 
@@ -42,7 +75,7 @@ router.post('/signup', async (request, response) => {
 
         const encryptPassword = await encrypt(password);
 
-        const user: SignUp = {username, email, password: encryptPassword};
+        const user: SignUp = {username: field(username), email: field(email), password: field(encryptPassword)};
         const createUser = await create(user);
 
         const accessToken = generateAccessToken(`${createUser._id}`);
@@ -103,11 +136,11 @@ router.post('/upload', async (request: CustomRequest, response) => {
             return response.status(404).json({message: 'user not found'});
         }
 
-        if (user.src) {
+        /*if (user.src) {
             const _id = user.src.toString();
             await Store.deleteOne({_id});
             removeSrc([_id]);
-        }
+        }*/
 
         const files = request.files as { image: any };
         const image = files.image;

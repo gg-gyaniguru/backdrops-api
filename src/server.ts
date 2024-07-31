@@ -1,4 +1,5 @@
 import express from 'express';
+import session from 'express-session';
 import {createServer} from 'http';
 import {Server} from "socket.io";
 import fileUpload from 'express-fileupload';
@@ -17,6 +18,7 @@ const io = new Server(httpServer, {
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
     }
 });
+
 const PORT = process.env.PORT || 9060;
 
 server.use(cors(
@@ -26,9 +28,15 @@ server.use(cors(
     }
 ));
 server.options('*', cors());
-    server.use(express.json());
+server.use(express.json());
 server.use(express.urlencoded({extended: true}));
 server.use(fileUpload());
+
+server.use(session({
+    secret: process.env.SECRET_KEY as string,
+    resave: false,
+    saveUninitialized: true,
+}));
 
 (async () => {
     await connection();

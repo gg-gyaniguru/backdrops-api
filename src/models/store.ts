@@ -4,7 +4,9 @@ interface Store extends Document {
 
 }
 
-const StoreSchema = new Schema<Store>({}, {versionKey: false});
+const StoreSchema = new Schema<Store>({
+
+}, {versionKey: false});
 
 const Store = model<Store>('Store', StoreSchema);
 

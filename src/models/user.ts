@@ -1,7 +1,7 @@
 import {Document, model, Schema, Types} from 'mongoose';
 
 interface User extends Document {
-    src: { type: Types.ObjectId, ref: 'Store' };
+    src: string;
     username: string;
     email: string;
     password: string;
@@ -15,7 +15,7 @@ interface User extends Document {
 }
 
 const UserSchema = new Schema<User>({
-    src: {type: Types.ObjectId, ref: 'Store', default: null},
+    src: {type: String, default: null},
     username: {type: String, required: true, unique: true, trim: true},
     email: {type: String, required: true, unique: true, trim: true},
     password: {type: String, required: true, trim: true},

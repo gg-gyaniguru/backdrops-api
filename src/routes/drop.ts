@@ -1,9 +1,9 @@
 import express from 'express';
 import type {CustomRequest} from "../types/CustomRequest.ts";
-import {store} from "../queries/store.ts";
 import Drop from "../models/drop.ts";
 import User from "../models/user.ts";
 import Store from "../models/store.ts";
+import cloudinary from "../utils/cloudinary.ts";
 import {unlinkSync} from "node:fs";
 import {existsBy_id} from "../queries/user.ts";
 import {existsDropBy_id} from "../queries/drop.ts";
@@ -18,11 +18,20 @@ const png = (_id: string) => {
 }
 
 const createSrc = async (image: any) => {
-    const newStore = await store();
-    const _id = newStore._id;
-    image.name = png(`${_id}`);
-    image.mv(`public/${image.name}`);
-    return _id;
+    try {
+        const newStore = new Store();
+        const _id = newStore._id;
+        image.name = png(`${_id}`);
+        const filePath = `public/${image.name}`;
+        await image.mv(filePath);
+        const response = await cloudinary.uploader.upload(filePath, {
+            resource_type: 'image'
+        });
+        unlinkSync(filePath);
+        return response.url;
+    } catch (error: any) {
+        throw new Error(error.message);
+    }
 }
 
 const removeSrc = (src: string[]) => {
@@ -57,13 +66,13 @@ router.post('/create', async (request: CustomRequest, response) => {
             return response.status(404).json({message: 'image not found'});
         }
 
-        if (image.length > 1) {
-            for (const i of image) {
-                src.push(await createSrc(i));
-            }
-        } else {
-            src.push(await createSrc(image));
-        }
+        // if (image.length > 1) {
+        //     for (const i of image) {
+        //         src.push(await createSrc(i));
+        //     }
+        // } else {
+        src.push(await createSrc(image));
+        // }
 
         const drop = new Drop({
             src: src,
@@ -75,12 +84,11 @@ router.post('/create', async (request: CustomRequest, response) => {
 
         // await user.updateOne({$push: {drops: createDrop}});
 
-        user.drops.push(createDrop._id as any);
+        user.drops.push(createDrop._id as { type: Types.ObjectId, ref: 'Drop' });
         await user.save();
 
         return response.status(200).json({message: 'drop create'});
     } catch (error) {
-        console.log(error)
         return response.status(500).json({message: 'internal error'});
     }
 });
