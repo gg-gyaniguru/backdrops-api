@@ -16,10 +16,6 @@ const {GMAIL_ID, GMAIL_PASSWORD} = process.env;
 
 const router = express.Router();
 
-const field = (input: string): string => {
-    return input.trim().toLowerCase();
-}
-
 router.post('/otp', async (request, response) => {
     try {
         const {email, otp} = request.body;
@@ -34,7 +30,7 @@ router.post('/otp', async (request, response) => {
 
         const mailOptions = {
             from: GMAIL_ID,
-            to: field(email),
+            to: email,
             subject: 'backdrops verification',
             text: otp
         }
@@ -75,7 +71,7 @@ router.post('/signup', async (request, response) => {
 
         const encryptPassword = await encrypt(password);
 
-        const user: SignUp = {username: field(username), email: field(email), password: field(encryptPassword)};
+        const user: SignUp = {username: username, email: email, password: encryptPassword};
         const createUser = await create(user);
 
         const accessToken = generateAccessToken(`${createUser._id}`);
