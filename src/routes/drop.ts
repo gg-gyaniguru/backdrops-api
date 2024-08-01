@@ -107,6 +107,11 @@ router.get('/get/:username', async (request: CustomRequest, response) => {
         const _id = request._id;
         const {username} = request.params;
 
+        const page = parseInt(`${request?.query?.page}`) || 1;
+        const limit = parseInt(`${request?.query?.limit}`) || 10;
+        const skip = (page - 1) * limit;
+
+
         const drops = await Drop.aggregate([
             {
                 $lookup: {
@@ -128,6 +133,18 @@ router.get('/get/:username', async (request: CustomRequest, response) => {
                 },
             },
             {
+                $addFields: {
+                    allDrops: {$size: '$user.drops'}
+                }
+            },
+            {
+                $sort: {
+                    '_id': -1
+                }
+            },
+            {$skip: skip},
+            {$limit: limit},
+            {
                 $project: {
                     _id: 1,
                     src: 1,
@@ -141,6 +158,7 @@ router.get('/get/:username', async (request: CustomRequest, response) => {
                     likes: {$size: '$likes'},
                     isLike: 1,
                     comments: {$size: '$comments'},
+                    allDrops: 1
                 },
             }
         ])
@@ -158,6 +176,12 @@ router.get('/get', async (request: CustomRequest, response) => {
 
         const _id = request._id;
 
+        const page = parseInt(`${request?.query?.page}`) || 1;
+        const limit = parseInt(`${request?.query?.limit}`) || 10;
+        const skip = (page - 1) * limit;
+
+        const allDDrops = await Drop.countDocuments().exec();
+
         const drops = await Drop.aggregate([
             {$match: {}},
             {
@@ -173,11 +197,18 @@ router.get('/get', async (request: CustomRequest, response) => {
             },
             {
                 $addFields: {
+                    allDrops: allDDrops
+                },
+            },
+            {
+                $addFields: {
                     isLike: {
                         $in: [new Types.ObjectId(_id), '$likes']
                     }
                 },
             },
+            {$skip: skip},
+            {$limit: limit},
             {
                 $project: {
                     _id: 1,
@@ -192,7 +223,11 @@ router.get('/get', async (request: CustomRequest, response) => {
                     likes: {$size: '$likes'},
                     isLike: 1,
                     comments: {$size: '$comments'},
+                    allDrops: 1
                 },
+            },
+            {
+                $sample: {size: 10}
             }
         ])
 
