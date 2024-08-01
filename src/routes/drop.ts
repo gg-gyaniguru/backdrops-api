@@ -2,7 +2,6 @@ import express from 'express';
 import type {CustomRequest} from "../types/CustomRequest.ts";
 import Drop from "../models/drop.ts";
 import User from "../models/user.ts";
-import Store from "../models/store.ts";
 import cloudinary from "../utils/cloudinary.ts";
 import {unlinkSync} from "node:fs";
 import {existsBy_id} from "../queries/user.ts";
@@ -10,6 +9,7 @@ import {existsDropBy_id} from "../queries/drop.ts";
 import {Types} from "mongoose";
 import {verify} from "../middlewares/user.ts";
 import Comment from "../models/comment.ts";
+import random from "../utils/random.ts";
 
 const router = express.Router();
 
@@ -19,24 +19,33 @@ const png = (_id: string) => {
 
 const createSrc = async (image: any) => {
     try {
-        const newStore = new Store();
-        const _id = newStore._id;
-        image.name = png(`${_id}`);
+        image.name = png(random(20));
         const filePath = `public/${image.name}`;
         await image.mv(filePath);
         const response = await cloudinary.uploader.upload(filePath, {
             resource_type: 'image'
         });
+        /*const createStore: CreateStore = {
+            key: response.version,
+            unique: response.public_id
+        }*/
+        /*const newStore = await store(createStore);
+        return newStore._id;*/
         unlinkSync(filePath);
-        return response.url;
+        return `${response.version}/${response.public_id}`
     } catch (error: any) {
         throw new Error(error.message);
     }
 }
 
-const removeSrc = (src: string[]) => {
-    for (const s of src) {
-        unlinkSync(`public/${png(s)}`);
+const removeSrc = async (src: string[]) => {
+    try {
+        for (const s of src) {
+            const i = s.split('/')[1];
+            await cloudinary.uploader.destroy(i);
+        }
+    } catch (error: any) {
+        throw new Error(error.message);
     }
 }
 
@@ -66,13 +75,13 @@ router.post('/create', async (request: CustomRequest, response) => {
             return response.status(404).json({message: 'image not found'});
         }
 
-        // if (image.length > 1) {
-        //     for (const i of image) {
-        //         src.push(await createSrc(i));
-        //     }
-        // } else {
-        src.push(await createSrc(image));
-        // }
+        if (image.length > 1) {
+            for (const i of image) {
+                src.push(await createSrc(i));
+            }
+        } else {
+            src.push(await createSrc(image));
+        }
 
         const drop = new Drop({
             src: src,
@@ -443,9 +452,9 @@ router.delete('/remove/:_id', async (request: CustomRequest, response) => {
             await User.updateMany({comments: comment._id}, {$pull: {comments: comment._id}}).exec();
         }
 
-        removeSrc(drop.src.map(src => src.toString()));
+        await removeSrc(drop.src);
 
-        await Store.deleteMany({_id: {$in: drop.src}}).exec();
+        // await Store.deleteMany({_id: {$in: drop.src}}).exec();
 
         await User.updateOne({drops: _id}, {$pull: {drops: _id}}).exec();
         await User.updateMany({likes: _id}, {$pull: {likes: _id}}).exec();

@@ -1,7 +1,13 @@
 import Store from "../models/store.ts";
 
-const store = async () => {
-    return await new Store().save();
+type CreateStore = {
+    key: number,
+    unique: string
 }
 
-export {store}
+const store = async (store: CreateStore) => {
+    return await new Store(store).save();
+}
+
+export type {CreateStore};
+export {store};

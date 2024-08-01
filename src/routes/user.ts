@@ -5,7 +5,7 @@ import {isValidEmail, isValidUsername} from "../validations/user.ts";
 import {compare, encrypt} from "../utils/bcrypt.ts";
 import User from "../models/user.ts";
 import type {CustomRequest} from "../types/CustomRequest.ts";
-import {createSrc} from "./drop.ts";
+import {createSrc, removeSrc} from "./drop.ts";
 import {Types} from "mongoose";
 import {verify} from "../middlewares/user.ts";
 import {generateAccessToken} from "../utils/jwt.ts";
@@ -132,11 +132,9 @@ router.post('/upload', async (request: CustomRequest, response) => {
             return response.status(404).json({message: 'user not found'});
         }
 
-        /*if (user.src) {
-            const _id = user.src.toString();
-            await Store.deleteOne({_id});
-            removeSrc([_id]);
-        }*/
+        if (user.src) {
+            await removeSrc([user.src]);
+        }
 
         const files = request.files as { image: any };
         const image = files.image;
