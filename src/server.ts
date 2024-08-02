@@ -8,6 +8,7 @@ import user from './routes/user.ts';
 import drop from './routes/drop.ts';
 import comment from "./routes/comment.ts";
 import cors from 'cors';
+import {secret} from "./middlewares/route.ts";
 
 const server = express();
 const router = express.Router();
@@ -39,7 +40,10 @@ server.use(session({
 }));
 
 (async () => {
+
     await connection();
+
+    server.use(secret);
 
     router.get('/', (request, response) => {
         return response.status(200).json({message: 'server is running'});
