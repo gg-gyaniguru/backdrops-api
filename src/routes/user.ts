@@ -258,7 +258,7 @@ router.post('/follow', async (request: CustomRequest, response) => {
         await User.updateOne({_id: following_id}, {$push: {notifications: `${newNotification._id}`}}).exec();
         return response.status(202).json({message: 'following'});
     } catch (error) {
-        console.log(error)
+
         return response.status(500).json({message: 'internal error'});
     }
 });
@@ -552,7 +552,6 @@ router.delete('/remove', async (request: CustomRequest, response) => {
 router.get('/getAll', async (request: CustomRequest, response) => {
     try {
         const _id = request._id;
-        console.log(_id)
         const page = Number(request.query.page) || 1;
         const limit = Number(request.query.limit) || 10;
         const skip = (page - 1) * limit;

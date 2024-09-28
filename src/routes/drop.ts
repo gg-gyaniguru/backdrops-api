@@ -91,7 +91,7 @@ router.post('/create', async (request: CustomRequest, response) => {
 
         return response.status(200).json({message: 'drop create'});
     } catch (error) {
-        console.log(error)
+
         return response.status(500).json({message: 'internal error'});
     }
 });
@@ -411,8 +411,6 @@ router.get('/search/:description', async (request: CustomRequest, response) => {
 
         drops.sort(() => Math.random() - 0.5);
 
-        // console.log(drops)
-
         return response.status(200).json({data: drops, allDrops: allDrops + allCollections});
     } catch (error) {
 
@@ -433,7 +431,6 @@ router.post('/like', async (request: CustomRequest, response) => {
 
         const drop = await Drop.findOne({_id: drop_id}).exec();
 
-        // console.log(drop?.user?._id);
 
         if (_id !== drop?.user?._id.toString()) {
 
