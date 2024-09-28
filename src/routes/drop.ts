@@ -10,6 +10,8 @@ import {Types} from "mongoose";
 import {verify} from "../middlewares/user.ts";
 import Comment from "../models/comment.ts";
 import random from "../utils/random.ts";
+import Collection from "../models/collection.ts";
+import Notification from "../models/notification.ts";
 
 const router = express.Router();
 
@@ -25,25 +27,17 @@ const createSrc = async (image: any) => {
         const response = await cloudinary.uploader.upload(filePath, {
             resource_type: 'image'
         });
-        /*const createStore: CreateStore = {
-            key: response.version,
-            unique: response.public_id
-        }*/
-        /*const newStore = await store(createStore);
-        return newStore._id;*/
         unlinkSync(filePath);
-        return `${response.version}/${response.public_id}`
+        return response.url;
     } catch (error: any) {
         throw new Error(error.message);
     }
 }
 
-const removeSrc = async (src: string[]) => {
+const removeSrc = async (src: string) => {
     try {
-        for (const s of src) {
-            const i = s.split('/')[1];
-            await cloudinary.uploader.destroy(i);
-        }
+        const i = src.split('/').slice(-1)[0].split('.')[0];
+        await cloudinary.uploader.destroy(i);
     } catch (error: any) {
         throw new Error(error.message);
     }
@@ -53,6 +47,7 @@ router.use(verify);
 
 router.post('/create', async (request: CustomRequest, response) => {
     try {
+
         const _id = request._id;
         const {description} = request.body;
 
@@ -69,19 +64,19 @@ router.post('/create', async (request: CustomRequest, response) => {
         const files = request.files as { image: any };
         const image = files.image;
 
-        const src = [];
-
         if (!image) {
             return response.status(404).json({message: 'image not found'});
         }
 
-        if (image.length > 1) {
+        /*if (image.length > 1) {
             for (const i of image) {
                 src.push(await createSrc(i));
             }
         } else {
             src.push(await createSrc(image));
-        }
+        }*/
+
+        const src = await createSrc(image);
 
         const drop = new Drop({
             src: src,
@@ -91,16 +86,75 @@ router.post('/create', async (request: CustomRequest, response) => {
 
         const createDrop = await drop.save();
 
-        // await user.updateOne({$push: {drops: createDrop}});
-
         user.drops.push(createDrop._id as { type: Types.ObjectId, ref: 'Drop' });
         await user.save();
 
         return response.status(200).json({message: 'drop create'});
     } catch (error) {
+        console.log(error)
         return response.status(500).json({message: 'internal error'});
     }
 });
+
+router.get('/get/_id', async (request: CustomRequest, response) => {
+        try {
+            const _id = request._id;
+
+            const page = parseInt(`${request?.query?.page}`) || 1;
+            const limit = parseInt(`${request?.query?.limit}`) || 10;
+            const skip = (page - 1) * limit;
+
+            const drops = await Drop.aggregate([
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'user',
+                        foreignField: '_id',
+                        as: 'user',
+                    }
+                },
+                {
+                    $match: {'user': {$elemMatch: {_id: new Types.ObjectId(_id)}}}
+                },
+                {
+                    $unwind: '$user',
+                },
+                {
+                    $addFields: {
+                        isLike: {
+                            $in: [new Types.ObjectId(_id), '$likes']
+                        }
+                    },
+                },
+                {
+                    $addFields: {
+                        allDrops: {$size: '$user.drops'}
+                    }
+                },
+                {
+                    $sort: {
+                        '_id': -1
+                    }
+                },
+                {$skip: skip},
+                {$limit: limit},
+                {
+                    $project: {
+                        _id: 1,
+                        src: 1,
+                        allDrops: 1
+                    },
+                }
+            ])
+
+            return response.status(200).json({data: drops});
+            // return response.status(200).json({data: user?.drops});
+        } catch
+            (error) {
+            return response.status(500).json({message: error});
+        }
+    }
+);
 
 router.get('/get/:username', async (request: CustomRequest, response) => {
     try {
@@ -148,16 +202,6 @@ router.get('/get/:username', async (request: CustomRequest, response) => {
                 $project: {
                     _id: 1,
                     src: 1,
-                    description: 1,
-                    user: {
-                        _id: 1,
-                        src: 1,
-                        username: 1,
-                        verified: 1
-                    },
-                    likes: {$size: '$likes'},
-                    isLike: 1,
-                    comments: {$size: '$comments'},
                     allDrops: 1
                 },
             }
@@ -180,10 +224,88 @@ router.get('/get', async (request: CustomRequest, response) => {
         const limit = parseInt(`${request?.query?.limit}`) || 10;
         const skip = (page - 1) * limit;
 
-        const allDDrops = await Drop.countDocuments().exec();
+        // const allDrops = await Drop.countDocuments().exec();
+        //
+        // const drops = await Drop.aggregate([
+        //     {
+        //         $addFields: {
+        //             allDrops: allDrops
+        //         },
+        //     },
+        //     {$skip: skip},
+        //     {$limit: limit},
+        //     {
+        //         $sample: {size: allDrops}
+        //     },
+        //     {
+        //         $project: {
+        //             _id: 1,
+        //             src: 1,
+        //             allDrops: 1
+        //         },
+        //     },
+        // ])
 
-        const drops = await Drop.aggregate([
-            {$match: {}},
+        const allDrops = await Drop.find().countDocuments().exec();
+        const allCollections = await Collection.find().countDocuments().exec();
+
+        // const [d, c] = await Promise.all([
+        //     Drop.find().select(['_id', 'src', 'description']).skip(skip).limit(limit).exec(),
+        //     Collection.find().select(['_id', 'src', 'name']).skip(skip).limit(limit).exec()
+        // ]);
+
+        const [d, c] = await Promise.all([
+            Drop.aggregate([
+                {
+                    $sample: {size: allDrops}
+                },
+                {$skip: skip},
+                {$limit: limit},
+                {
+                    $project: {
+                        _id: 1,
+                        src: 1,
+                        description: 1
+                    },
+                },
+            ]),
+            Collection.aggregate([
+                {$match: {drops: {$not: {$size: 0}}}},
+                {
+                    $sample: {size: allCollections}
+                },
+                {$skip: skip},
+                {$limit: limit},
+                {
+                    $project: {
+                        _id: 1,
+                        src: 1,
+                        name: 1
+                    },
+                },
+            ])
+        ]);
+
+        const drops = [...d, ...c];
+
+        drops.sort(() => Math.random() - 0.5);
+
+        return response.status(200).json({data: drops, allDrops: allDrops + allCollections});
+    } catch (error) {
+        return response.status(500).json({message: error});
+    }
+
+});
+
+router.get('/:_id', async (request: CustomRequest, response) => {
+    try {
+        const user = request._id;
+        const {_id} = request.params;
+
+        const drop = await Drop.aggregate([
+            {
+                $match: {_id: new Types.ObjectId(_id)}
+            },
             {
                 $lookup: {
                     from: 'users',
@@ -197,18 +319,11 @@ router.get('/get', async (request: CustomRequest, response) => {
             },
             {
                 $addFields: {
-                    allDrops: allDDrops
-                },
-            },
-            {
-                $addFields: {
                     isLike: {
-                        $in: [new Types.ObjectId(_id), '$likes']
+                        $in: [new Types.ObjectId(user), '$likes']
                     }
                 },
             },
-            {$skip: skip},
-            {$limit: limit},
             {
                 $project: {
                     _id: 1,
@@ -225,64 +340,82 @@ router.get('/get', async (request: CustomRequest, response) => {
                     comments: {$size: '$comments'},
                     allDrops: 1
                 },
-            },
-            {
-                $sample: {size: 10}
             }
-        ])
+        ]);
 
-        return response.status(200).json({data: drops});
+        return response.status(200).json({data: drop[0]});
+
     } catch (error) {
         return response.status(500).json({message: error});
     }
-
 });
 
 router.get('/search/:description', async (request: CustomRequest, response) => {
     try {
-        const _id = request._id;
-
         const {description} = request.params;
 
-        const drops = await Drop.aggregate([
-            {$match: {description: new RegExp(`^${description}`)}},
-            {
-                $lookup: {
-                    from: 'users',
-                    localField: 'user',
-                    foreignField: '_id',
-                    as: 'user',
-                }
-            },
-            {
-                $unwind: '$user',
-            },
-            {
-                $addFields: {
-                    isLike: {
-                        $in: [new Types.ObjectId(_id), '$likes']
-                    }
-                },
-            },
-            {
-                $project: {
-                    _id: 1,
-                    src: 1,
-                    description: 1,
-                    user: {
-                        _id: 1,
-                        src: 1,
-                        username: 1,
-                        verified: 1
-                    },
-                    likes: {$size: '$likes'},
-                    isLike: 1,
-                    comments: {$size: '$comments'},
-                },
+        const page = parseInt(`${request?.query?.page}`) || 1;
+        const limit = parseInt(`${request?.query?.limit}`) || 10;
+        const skip = (page - 1) * limit;
+
+        const allDrops = await Drop.find({
+            description: {
+                $regex: description,
+                $options: 'i'
             }
-        ])
-        return response.status(200).json({data: drops});
+        }).countDocuments().exec();
+        const allCollections = await Collection.find({
+            name: {
+                $regex: description,
+                $options: 'i'
+            }
+        }).countDocuments().exec();
+
+        // const drops = await Drop.aggregate([
+        //     {$match: {description: {$regex: description, $options: 'i'}}},
+        //     {
+        //         $addFields: {
+        //             allDrops: allDrops
+        //         },
+        //     },
+        //     {$skip: skip},
+        //     {$limit: limit},
+        //     {
+        //         $project: {
+        //             _id: 1,
+        //             src: 1,
+        //             allDrops: 1
+        //         },
+        //     },
+        //     {
+        //         $sample: {size: 10}
+        //     }
+        // ]);
+
+        const [d, c] = await Promise.all([
+            Drop.find({
+                description: {
+                    $regex: description,
+                    $options: 'i'
+                }
+            }).select(['_id', 'src', 'description']).skip(skip).limit(limit).exec(),
+            Collection.find({
+                name: {
+                    $regex: description,
+                    $options: 'i'
+                }
+            }).select(['_id', 'src', 'name']).skip(skip).limit(limit).exec()
+        ]);
+
+        const drops = [...d, ...c];
+
+        drops.sort(() => Math.random() - 0.5);
+
+        // console.log(drops)
+
+        return response.status(200).json({data: drops, allDrops: allDrops + allCollections});
     } catch (error) {
+
         return response.status(500).json({message: error});
     }
 });
@@ -296,6 +429,23 @@ router.post('/like', async (request: CustomRequest, response) => {
 
         if (!await existsBy_id(_id as string) || !await existsDropBy_id(drop_id)) {
             return response.status(404).json({message: 'not found'});
+        }
+
+        const drop = await Drop.findOne({_id: drop_id}).exec();
+
+        // console.log(drop?.user?._id);
+
+        if (_id !== drop?.user?._id.toString()) {
+
+            const notification = new Notification({
+                reference: 'like',
+                user: _id,
+                drop: drop_id
+            });
+
+            const newNotification = await notification.save();
+
+            await User.updateOne({_id: `${drop?.user?._id}`}, {$push: {notifications: `${newNotification._id}`}}).exec();
         }
 
         await Drop.updateOne({_id: drop_id}, {$push: {likes: _id}}).exec();
@@ -380,7 +530,7 @@ router.get('/comments/:_id', async (request: CustomRequest, response) => {
             const limit = Number(request.query.limit) || 10;
             const skip = (page - 1) * limit;
 
-            /* const drop = await Drop.findOne({_id}).select(['comments']).populate({
+            /* const drop = await Drops.findOne({_id}).select(['comments']).populate({
                  path: 'comments',
                  select: ['-drop'],
                  populate: {path: 'user', select: ['src', 'username', 'verified']}
@@ -491,10 +641,12 @@ router.delete('/remove/:_id', async (request: CustomRequest, response) => {
 
         // await Store.deleteMany({_id: {$in: drop.src}}).exec();
 
+        await Collection.updateMany({drops: _id}, {$pull: {drops: _id}}).exec();
         await User.updateOne({drops: _id}, {$pull: {drops: _id}}).exec();
         await User.updateMany({likes: _id}, {$pull: {likes: _id}}).exec();
         // await User.updateMany({comments: _id}, {$pull: {comments: _id}}).exec();
         await Comment.deleteMany({_id: {$in: drop.comments}}).exec();
+
 
         await drop?.deleteOne();
 

@@ -14,5 +14,5 @@ const CommentSchema = new Schema<Comment>({
 
 const Comment = model<Comment>('Comment', CommentSchema);
 
-export type {Comment}
+export type {Comment};
 export default Comment;

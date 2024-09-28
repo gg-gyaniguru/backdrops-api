@@ -4,6 +4,7 @@ import User from "../models/user.ts";
 import Drop from "../models/drop.ts";
 import Comment from "../models/comment.ts";
 import {verify} from "../middlewares/user.ts";
+import Notification from "../models/notification.ts";
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.post('/reply', async (request: CustomRequest, response) => {
         const {reply, drop_id} = request.body;
 
         const user = await User.findOne({_id}).select(['_id']).exec();
-        const drop = await Drop.findOne({_id: drop_id}).select(['_id']).exec();
+        const drop = await Drop.findOne({_id: drop_id}).exec();
 
         if (!user) {
             return response.status(404).json({message: 'user not found'});
@@ -33,7 +34,20 @@ router.post('/reply', async (request: CustomRequest, response) => {
         await user.updateOne({$push: {comments: comment._id}}).exec();
         await drop.updateOne({$push: {comments: comment._id}}).exec();
 
-        await comment.save();
+        const newComment = await comment.save();
+
+        if (_id !== drop?.user?._id.toString()) {
+
+            const notification = new Notification({
+                reference: 'comment',
+                user: _id,
+                comment: newComment._id,
+            });
+
+            const newNotification = await notification.save();
+
+            await User.updateOne({_id: `${drop?.user?._id}`}, {$push: {notifications: `${newNotification._id}`}}).exec();
+        }
 
         return response.status(201).json({message: 'comment'});
 

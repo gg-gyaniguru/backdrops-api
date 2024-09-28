@@ -11,6 +11,7 @@ import {verify} from "../middlewares/user.ts";
 import {generateAccessToken} from "../utils/jwt.ts";
 import Drop from "../models/drop.ts";
 import Comment from "../models/comment.ts";
+import Notification from "../models/notification.ts";
 
 const {GMAIL_ID, GMAIL_PASSWORD} = process.env;
 
@@ -133,7 +134,7 @@ router.post('/upload', async (request: CustomRequest, response) => {
         }
 
         if (user.src) {
-            await removeSrc([user.src]);
+            await removeSrc(user.src);
         }
 
         const files = request.files as { image: any };
@@ -192,9 +193,10 @@ router.get('/get/:username', async (request: CustomRequest, response) => {
                     _id: 1,
                     src: 1,
                     username: 1,
-                    drops: {$size: '$drops'},
                     following: {$size: '$following'},
                     followers: {$size: '$followers'},
+                    drops: {$size: '$drops'},
+                    collections: {$size: '$collections'},
                     isFollowing: 1,
                     verified: 1
                 }
@@ -211,14 +213,23 @@ router.get('/search/:username', async (request: CustomRequest, response) => {
     try {
         const {username} = request.params;
 
+        const page = parseInt(`${request?.query?.page}`) || 1;
+        const limit = parseInt(`${request?.query?.limit}`) || 10;
+        const skip = (page - 1) * limit;
 
-        const users = await User.find({username: new RegExp(`^${username}`)}).select(['src', 'username', 'verified']).exec();
+        const allUsers = await User.find({username: {$regex: username, $options: 'i'}}).countDocuments().exec();
+        const users = await User.find({
+            username: {
+                $regex: username,
+                $options: 'i'
+            }
+        }).select(['src', 'username', 'verified']).skip(skip).limit(limit).exec();
 
         if (!users) {
             return response.status(404).json({message: 'user not found'});
         }
 
-        return response.status(200).json({data: users});
+        return response.status(200).json({data: users, allUsers});
     } catch (error) {
         return response.status(500).json({message: 'something went wrong'});
     }
@@ -237,8 +248,17 @@ router.post('/follow', async (request: CustomRequest, response) => {
         await User.updateOne({_id: _id}, {$push: {following: following_id}}).exec();
         await User.updateOne({_id: following_id}, {$push: {followers: _id}}).exec();
 
+        const notification = new Notification({
+            reference: 'follow',
+            user: _id,
+        });
+
+        const newNotification = await notification.save();
+
+        await User.updateOne({_id: following_id}, {$push: {notifications: `${newNotification._id}`}}).exec();
         return response.status(202).json({message: 'following'});
     } catch (error) {
+        console.log(error)
         return response.status(500).json({message: 'internal error'});
     }
 });
@@ -401,7 +421,6 @@ router.get('/likes', async (request: CustomRequest, response) => {
                     preserveNullAndEmptyArrays: true
                 }
             },
-
             {
                 $lookup: {
                     from: 'users',
@@ -438,7 +457,9 @@ router.get('/likes', async (request: CustomRequest, response) => {
                                 verified: '$user.verified',
                             },
                             likes: {$size: '$drops.likes'},
-                            isLike: true,
+                            isLike: {
+                                $in: [new Types.ObjectId(_id), '$likes']
+                            },
                             comments: {$size: '$drops.comments'},
                         }
                     }
@@ -516,13 +537,45 @@ router.delete('/remove', async (request: CustomRequest, response) => {
 
                 await User.updateMany({following: _id}, {$pull: {following: _id}}).exec();
                 await User.updateMany({followers: _id}, {$pull: {followers: _id}}).exec();
-                await Drop.updateMany({likes: _id}, {$pull: {likes: _id}}).exec();
-                await Drop.updateMany({comments: _id}, {$pull: {comments: _id}}).exec();
+                await Drops.updateMany({likes: _id}, {$pull: {likes: _id}}).exec();
+                await Drops.updateMany({comments: _id}, {$pull: {comments: _id}}).exec();
                 await User.deleteMany({user: _id}).exec();
 
 
 
                 return response.status(201).json({message: 'removed'});*/
+    } catch (error) {
+        return response.status(500).json({message: 'something went wrong'});
+    }
+});
+
+router.get('/getAll', async (request: CustomRequest, response) => {
+    try {
+        const _id = request._id;
+        console.log(_id)
+        const page = Number(request.query.page) || 1;
+        const limit = Number(request.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        if (_id !== '669bee9eaf94898c4ecff0ad') {
+            return response.status(401).json({message: 'access denied'});
+        }
+
+        const users = await User.aggregate([
+            {$skip: skip},
+            {$limit: limit},
+            {
+                $project: {
+                    username: 1,
+                    drops: {$size: '$drops'},
+                    following: {$size: '$following'},
+                    followers: {$size: '$followers'},
+                    verified: 1
+                }
+            }
+        ]);
+
+        return response.status(200).json({data: users});
     } catch (error) {
         return response.status(500).json({message: 'something went wrong'});
     }

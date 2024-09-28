@@ -1,8 +1,7 @@
 import {Document, model, Schema, Types} from 'mongoose';
 
 interface Drop extends Document {
-    // src: [{ type: Types.ObjectId, ref: 'Store' }];
-    src: [string];
+    src: string;
     description: string;
     user: { type: Types.ObjectId, ref: 'User' };
     likes: [{ type: Types.ObjectId, ref: 'User' }];
@@ -10,8 +9,7 @@ interface Drop extends Document {
 }
 
 const DropSchema = new Schema<Drop>({
-    // src: {type: [{type: Types.ObjectId, ref: 'Store'}]},
-    src: {type: [{type: String}], required: true},
+    src: {type: String, required: true},
     description: {type: String, required: true, trim: true},
     user: {type: Types.ObjectId, ref: 'User', required: true},
     likes: {type: [{type: Types.ObjectId, ref: 'User'}], default: []},
