@@ -3,7 +3,7 @@
   "module": "src/server.ts",
   "type": "module",
   "scripts": {
-    "start": "bun --watch src/server.ts"
+    "start": "bun run src/server.ts"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
